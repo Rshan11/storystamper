@@ -38,26 +38,13 @@ export default {
       const base64Image = btoa(binary);
       const mimeType = imageFile.type || 'image/jpeg';
 
-      // Call Gemini Flash with grounding
+      // Call Gemini for fact-checking
       const factCheckResult = await checkWithGemini(base64Image, mimeType, env.GEMINI_API_KEY);
 
-      // Generate stamped image
-      const stampedImageBuffer = await generateStampedImage(arrayBuffer, factCheckResult);
-
-      // Store in R2
-      const imageId = crypto.randomUUID();
-      const fileName = `stamps/${imageId}.png`;
-      
-      await env.STAMPS_BUCKET.put(fileName, stampedImageBuffer, {
-        httpMetadata: { contentType: 'image/png' },
-      });
-
-      // Return the URL
-      const imageUrl = `${env.PUBLIC_URL}/${fileName}`;
-
+      // Skip R2 for now - just return the result
       return new Response(JSON.stringify({
         success: true,
-        imageUrl,
+        imageUrl: null,
         verdict: factCheckResult.verdict,
         reasons: factCheckResult.reasons,
       }), {
@@ -68,8 +55,12 @@ export default {
       });
 
     } catch (error) {
-      console.error('Error:', error);
-      return new Response(JSON.stringify({ error: error.message }), {
+      console.error('Error:', error.stack || error);
+      return new Response(JSON.stringify({
+        error: error.message,
+        stack: error.stack,
+        type: error.name
+      }), {
         status: 500,
         headers: {
           'Content-Type': 'application/json',
