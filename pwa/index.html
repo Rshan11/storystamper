@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>StoryStamper</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      color: #fff;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+    }
+
+    .tagline {
+      text-align: center;
+      color: #888;
+      font-size: 0.9rem;
+      margin-bottom: 30px;
+    }
+
+    .upload-area {
+      border: 2px dashed #444;
+      border-radius: 16px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .upload-area:hover, .upload-area.dragover {
+      border-color: #4a9eff;
+      background: rgba(74, 158, 255, 0.05);
+    }
+
+    .upload-area input {
+      display: none;
+    }
+
+    .upload-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+    }
+
+    .upload-text {
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+
+    .upload-subtext {
+      color: #666;
+      font-size: 0.85rem;
+    }
+
+    /* Loading state */
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid #333;
+      border-top-color: #4a9eff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      color: #888;
+    }
+
+    /* Result state */
+    .result {
+      display: none;
+    }
+
+    .result.active {
+      display: block;
+    }
+
+    .result-image-container {
+      position: relative;
+      margin-bottom: 20px;
+    }
+
+    .result-image {
+      width: 100%;
+      border-radius: 12px;
+      display: block;
+    }
+
+    .verdict-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+    }
+
+    .verdict-unverified { background: #f59e0b; color: #000; }
+    .verdict-likely-true { background: #10b981; color: #fff; }
+    .verdict-verified-true { background: #059669; color: #fff; }
+    .verdict-likely-false { background: #ef4444; color: #fff; }
+    .verdict-verified-false { background: #dc2626; color: #fff; }
+    .verdict-satire { background: #8b5cf6; color: #fff; }
+
+    .reasons {
+      background: rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .reasons h3 {
+      font-size: 0.85rem;
+      color: #888;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .reasons ul {
+      list-style: none;
+    }
+
+    .reasons li {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .reasons li:last-child {
+      border-bottom: none;
+    }
+
+    .reasons li::before {
+      content: "→ ";
+      color: #4a9eff;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 14px 20px;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: #4a9eff;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #3a8eef;
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.15);
+    }
+
+    /* Preview canvas (hidden, used for stamping) */
+    #stampCanvas {
+      display: none;
+    }
+
+    /* Error state */
+    .error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 20px;
+      display: none;
+    }
+
+    .error.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📸 StoryStamper</h1>
+    <p class="tagline">Check screenshots. Stamp the truth.</p>
+
+    <!-- Upload State -->
+    <div class="upload-area" id="uploadArea">
+      <input type="file" id="fileInput" accept="image/*">
+      <div class="upload-icon">📷</div>
+      <div class="upload-text">Tap to upload a screenshot</div>
+      <div class="upload-subtext">or drag and drop</div>
+    </div>
+
+    <!-- Loading State -->
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">Checking sources...</div>
+    </div>
+
+    <!-- Result State -->
+    <div class="result" id="result">
+      <div class="result-image-container">
+        <img class="result-image" id="resultImage" src="" alt="Stamped result">
+      </div>
+      
+      <div id="verdictBadge" class="verdict-badge"></div>
+      
+      <div class="reasons">
+        <h3>Why?</h3>
+        <ul id="reasonsList"></ul>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="saveBtn">Save Image</button>
+        <button class="btn btn-secondary" id="newCheckBtn">New Check</button>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div class="error" id="error">
+      <strong>Something went wrong</strong>
+      <p id="errorText"></p>
+    </div>
+  </div>
+
+  <!-- Hidden canvas for stamping -->
+  <canvas id="stampCanvas"></canvas>
+
+  <script>
+    const WORKER_URL = 'https://storystamper.ryan-b00.workers.dev';
+
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInput = document.getElementById('fileInput');
+    const loading = document.getElementById('loading');
+    const result = document.getElementById('result');
+    const resultImage = document.getElementById('resultImage');
+    const verdictBadge = document.getElementById('verdictBadge');
+    const reasonsList = document.getElementById('reasonsList');
+    const saveBtn = document.getElementById('saveBtn');
+    const newCheckBtn = document.getElementById('newCheckBtn');
+    const error = document.getElementById('error');
+    const errorText = document.getElementById('errorText');
+    const canvas = document.getElementById('stampCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let currentStampedDataUrl = null;
+
+    // Click to upload
+    uploadArea.addEventListener('click', () => fileInput.click());
+    
+    // File selected
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files[0]) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    // Drag and drop
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadArea.classList.add('dragover');
+    });
+
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.classList.remove('dragover');
+    });
+
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    // New check button
+    newCheckBtn.addEventListener('click', () => {
+      showUpload();
+      fileInput.value = '';
+    });
+
+    // Save button
+    saveBtn.addEventListener('click', () => {
+      if (currentStampedDataUrl) {
+        const link = document.createElement('a');
+        link.download = 'fact-check-' + Date.now() + '.png';
+        link.href = currentStampedDataUrl;
+        link.click();
+      }
+    });
+
+    function showUpload() {
+      uploadArea.style.display = 'block';
+      loading.classList.remove('active');
+      result.classList.remove('active');
+      error.classList.remove('active');
+    }
+
+    function showLoading() {
+      uploadArea.style.display = 'none';
+      loading.classList.add('active');
+      result.classList.remove('active');
+      error.classList.remove('active');
+    }
+
+    function showResult() {
+      uploadArea.style.display = 'none';
+      loading.classList.remove('active');
+      result.classList.add('active');
+      error.classList.remove('active');
+    }
+
+    function showError(message) {
+      loading.classList.remove('active');
+      error.classList.add('active');
+      errorText.textContent = message;
+    }
+
+    async function handleFile(file) {
+      showLoading();
+
+      try {
+        // Send to worker for fact-checking
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const response = await fetch(WORKER_URL, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error('Server error: ' + response.status);
+        }
+
+        const data = await response.json();
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        // Generate stamped image client-side
+        await generateStampedImage(file, data);
+
+        // Show result
+        showResult();
+
+      } catch (err) {
+        console.error(err);
+        showError(err.message || 'Failed to check this screenshot');
+      }
+    }
+
+    async function generateStampedImage(file, data) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          // Set canvas size
+          const stampHeight = 160;
+          canvas.width = img.width;
+          canvas.height = img.height + stampHeight;
+
+          // Draw original image
+          ctx.drawImage(img, 0, 0);
+
+          // Draw stamp background
+          ctx.fillStyle = '#1a1a2e';
+          ctx.fillRect(0, img.height, canvas.width, stampHeight);
+
+          // Draw verdict
+          const verdictColors = {
+            'Verified True': '#059669',
+            'Likely True': '#10b981',
+            'Unverified': '#f59e0b',
+            'Likely False': '#ef4444',
+            'Verified False': '#dc2626',
+            'Satire': '#8b5cf6',
+          };
+
+          const verdictColor = verdictColors[data.verdict] || '#888';
+          
+          // Verdict text
+          ctx.fillStyle = verdictColor;
+          ctx.font = 'bold 24px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillText(data.verdict.toUpperCase(), 16, img.height + 35);
+
+          // Reasons
+          ctx.fillStyle = '#ccc';
+          ctx.font = '14px -apple-system, BlinkMacSystemFont, sans-serif';
+          
+          const reasons = data.reasons || [];
+          reasons.slice(0, 3).forEach((reason, i) => {
+            const truncated = reason.length > 60 ? reason.substring(0, 57) + '...' : reason;
+            ctx.fillText('→ ' + truncated, 16, img.height + 65 + (i * 24));
+          });
+
+          // Watermark
+          ctx.fillStyle = '#666';
+          ctx.font = '12px -apple-system, BlinkMacSystemFont, sans-serif';
+          ctx.fillText('Checked by StoryStamper', 16, img.height + stampHeight - 12);
+
+          // Update UI
+          currentStampedDataUrl = canvas.toDataURL('image/png');
+          resultImage.src = currentStampedDataUrl;
+
+          // Update verdict badge
+          verdictBadge.textContent = data.verdict;
+          verdictBadge.className = 'verdict-badge verdict-' + data.verdict.toLowerCase().replace(/\s+/g, '-');
+
+          // Update reasons list
+          reasonsList.innerHTML = '';
+          reasons.forEach(reason => {
+            const li = document.createElement('li');
+            li.textContent = reason;
+            reasonsList.appendChild(li);
+          });
+
+          resolve();
+        };
+
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = URL.createObjectURL(file);
+      });
+    }
+  </script>
+</body>
+</html>

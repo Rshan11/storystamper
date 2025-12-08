@@ -1,0 +1,14 @@
+name = "storystamper"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+PUBLIC_URL = "https://pub-048308ba112644d5bdd27ec1a7b14671.r2.dev"
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "STAMPS_BUCKET"
+bucket_name = "storystamper-stamps"
+
+# Secrets (set via wrangler secret put):
+# - GEMINI_API_KEY
