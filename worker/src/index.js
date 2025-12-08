@@ -11,6 +11,20 @@ export default {
       });
     }
 
+    // Test endpoint - GET returns version info
+    if (request.method === 'GET') {
+      return new Response(JSON.stringify({
+        version: '2.0',
+        hasApiKey: !!env.GEMINI_API_KEY,
+        timestamp: new Date().toISOString()
+      }), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
+    }
+
     if (request.method !== 'POST') {
       return new Response('Method not allowed', { status: 405 });
     }
