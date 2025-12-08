@@ -116,14 +116,18 @@ export default {
 };
 
 async function checkWithGemini(base64Image, mimeType, apiKey) {
-  const prompt = `You are a fact-checker analyzing a screenshot of a social media post.
+  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const prompt = `CONTEXT: Today is ${today}. Donald Trump is the current US President (second term, inaugurated January 2025).
+
+You are a fact-checker analyzing a screenshot of a social media post.
 
 Look at this image and:
 1. Identify the main factual claim(s) being made
-2. Search for credible sources to verify or refute the claim
+2. Use Google Search to find credible sources to verify or refute the claim
 3. Return your assessment
 
-IMPORTANT: 
+IMPORTANT:
 - Only mark something as "Likely False" if you find direct evidence contradicting it
 - Use "Unverified" if you simply cannot find sources (this is the default for unsourced viral stories)
 - Be concise and non-confrontational in your reasons
@@ -151,6 +155,9 @@ Return ONLY valid JSON in this exact format:
               },
             },
           ],
+        }],
+        tools: [{
+          google_search: {},
         }],
         generationConfig: {
           temperature: 0.1,
