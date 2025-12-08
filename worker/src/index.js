@@ -49,7 +49,7 @@ export default {
       const fileSizeKB = Math.round(arrayBuffer.byteLength / 1024);
 
       // TEST MODE: Return early to check if we get this far
-      const testMode = true;
+      const testMode = false;
       if (testMode) {
         return new Response(JSON.stringify({
           test: true,
@@ -136,7 +136,7 @@ Return ONLY valid JSON in this exact format:
 }`;
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
