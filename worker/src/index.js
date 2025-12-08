@@ -32,25 +32,37 @@ export default {
     try {
       const formData = await request.formData();
       const imageFile = formData.get('image');
-      
+
       if (!imageFile) {
         return new Response(JSON.stringify({ error: 'No image provided' }), {
           status: 400,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      }
+
+      // Check file size (max 4MB for Gemini)
+      const arrayBuffer = await imageFile.arrayBuffer();
+      const fileSizeKB = Math.round(arrayBuffer.byteLength / 1024);
+      console.log(`File size: ${fileSizeKB}KB`);
+
+      if (arrayBuffer.byteLength > 4 * 1024 * 1024) {
+        return new Response(JSON.stringify({ error: `Image too large: ${fileSizeKB}KB. Max 4MB.` }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
         });
       }
 
       // Convert image to base64 (chunked to avoid stack overflow)
-      const arrayBuffer = await imageFile.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
       let binary = '';
-      const chunkSize = 8192;
+      const chunkSize = 4096; // Smaller chunks for safety
       for (let i = 0; i < uint8Array.length; i += chunkSize) {
-        const chunk = uint8Array.subarray(i, i + chunkSize);
-        binary += String.fromCharCode.apply(null, chunk);
+        const chunk = uint8Array.subarray(i, Math.min(i + chunkSize, uint8Array.length));
+        binary += String.fromCharCode.apply(null, Array.from(chunk));
       }
       const base64Image = btoa(binary);
       const mimeType = imageFile.type || 'image/jpeg';
+      console.log(`Base64 length: ${base64Image.length}, mimeType: ${mimeType}`);
 
       // Call Gemini for fact-checking
       const factCheckResult = await checkWithGemini(base64Image, mimeType, env.GEMINI_API_KEY);
