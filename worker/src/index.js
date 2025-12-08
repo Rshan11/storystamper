@@ -29,8 +29,12 @@ export default {
       return new Response('Method not allowed', { status: 405 });
     }
 
+    // Wrap everything in outer try-catch
     try {
+      let step = 'parsing formData';
       const formData = await request.formData();
+
+      step = 'getting image';
       const imageFile = formData.get('image');
 
       if (!imageFile) {
@@ -40,9 +44,23 @@ export default {
         });
       }
 
-      // Check file size (max 4MB for Gemini)
+      step = 'getting arrayBuffer';
       const arrayBuffer = await imageFile.arrayBuffer();
       const fileSizeKB = Math.round(arrayBuffer.byteLength / 1024);
+
+      // TEST MODE: Return early to check if we get this far
+      const testMode = true;
+      if (testMode) {
+        return new Response(JSON.stringify({
+          test: true,
+          fileSizeKB,
+          mimeType: imageFile.type,
+          step
+        }), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      }
+
       console.log(`File size: ${fileSizeKB}KB`);
 
       if (arrayBuffer.byteLength > 4 * 1024 * 1024) {
