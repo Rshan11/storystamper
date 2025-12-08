@@ -376,7 +376,7 @@
 
         img.onload = () => {
           try {
-            const maxWidth = 2000; // Higher res for readable text
+            const maxWidth = 1024; // Optimal for Gemini Pro (prevents 500 errors)
             let width = img.width;
             let height = img.height;
 
