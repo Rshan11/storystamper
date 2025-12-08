@@ -156,9 +156,9 @@ Return ONLY valid JSON in this exact format:
             },
           ],
         }],
-        tools: [{
-          google_search: {},
-        }],
+        tools: [
+          { googleSearch: {} },
+        ],
         generationConfig: {
           temperature: 0.1,
           maxOutputTokens: 1024,
@@ -169,6 +169,7 @@ Return ONLY valid JSON in this exact format:
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('Gemini API raw error:', response.status, errorText);
     throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
   }
 
