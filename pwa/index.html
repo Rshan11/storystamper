@@ -368,13 +368,45 @@
       errorText.textContent = message;
     }
 
+    // Compress image to max 1200px width
+    async function compressImage(file) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxWidth = 1200;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob((blob) => {
+            resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+          }, 'image/jpeg', 0.8);
+        };
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
     async function handleFile(file) {
       showLoading();
 
       try {
+        // Compress image before sending
+        const compressedFile = await compressImage(file);
+
         // Send to worker for fact-checking
         const formData = new FormData();
-        formData.append('image', file);
+        formData.append('image', compressedFile);
 
         const response = await fetch(WORKER_URL, {
           method: 'POST',
