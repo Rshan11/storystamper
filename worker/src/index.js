@@ -116,7 +116,11 @@ export default {
 };
 
 async function checkWithGemini(base64Image, mimeType, apiKey) {
-  const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const today = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
 
   const prompt = `CONTEXT: Today is ${today}. Donald Trump is the current US President (second term, inaugurated January 2025).
 
@@ -124,12 +128,12 @@ You are a fact-checker analyzing a screenshot of a social media post.
 
 Look at this image and:
 1. Identify the main factual claim(s) being made
-2. Use Google Search to find credible sources to verify or refute the claim
+2. Evaluate whether the claim is likely true, likely false, clearly false, clearly true, or cannot be verified from trusted sources
 3. Return your assessment
 
 IMPORTANT:
-- Only mark something as "Likely False" if you find direct evidence contradicting it
-- Use "Unverified" if you simply cannot find sources (this is the default for unsourced viral stories)
+- Only mark something as "Likely False" if you see strong evidence it is wrong
+- Use "Unverified" if you simply cannot tell from normal knowledge
 - Be concise and non-confrontational in your reasons
 
 Return ONLY valid JSON in this exact format:
@@ -140,10 +144,13 @@ Return ONLY valid JSON in this exact format:
 }`;
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${apiKey}`,
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent',
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({
         contents: [{
           parts: [
@@ -156,9 +163,6 @@ Return ONLY valid JSON in this exact format:
             },
           ],
         }],
-        tools: [
-          { googleSearch: {} },
-        ],
         generationConfig: {
           temperature: 0.1,
           maxOutputTokens: 1024,
@@ -174,15 +178,14 @@ Return ONLY valid JSON in this exact format:
   }
 
   const data = await response.json();
-  
-  // Extract the text response
-  const textContent = data.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
-  
+
+  const textContent =
+    data.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
+
   if (!textContent) {
     throw new Error('No response from Gemini');
   }
 
-  // Parse JSON from response (handle markdown code blocks)
   let jsonStr = textContent;
   const jsonMatch = textContent.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) {
@@ -192,7 +195,6 @@ Return ONLY valid JSON in this exact format:
   try {
     return JSON.parse(jsonStr.trim());
   } catch (e) {
-    // If parsing fails, return a default structure
     console.error('Failed to parse Gemini response:', textContent);
     return {
       verdict: 'Unverified',
