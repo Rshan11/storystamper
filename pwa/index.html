@@ -368,7 +368,7 @@
       errorText.textContent = message;
     }
 
-    // Compress image to max 1200px width
+    // Compress image to max 2000px width (higher for text clarity)
     async function compressImage(file) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -376,7 +376,7 @@
 
         img.onload = () => {
           try {
-            const maxWidth = 1200;
+            const maxWidth = 2000; // Higher res for readable text
             let width = img.width;
             let height = img.height;
 
@@ -400,7 +400,7 @@
                 // Fallback to original file if compression fails
                 resolve(file);
               }
-            }, 'image/jpeg', 0.8);
+            }, 'image/jpeg', 0.92); // Higher quality for text
           } catch (err) {
             URL.revokeObjectURL(objectUrl);
             resolve(file); // Fallback to original
