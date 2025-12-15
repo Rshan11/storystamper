@@ -774,3 +774,222 @@ export const MANIFEST_JSON = `{
     }
   }
 }`;
+
+export const LOGIN_HTML = `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#1a202c" />
+    <title>Login - StoryStamper</title>
+    <link rel="icon" href="favicon.ico" sizes="48x48" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+        :root {
+            --bg-primary: #1a202c;
+            --green: #38a169;
+            --green-light: #48bb78;
+            --text-primary: #f7fafc;
+            --text-secondary: #a0aec0;
+            --text-muted: #718096;
+            --border: #2d3748;
+            --red: #e53e3e;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            min-height: 100vh;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .logo {
+            margin-bottom: 24px;
+        }
+
+        .logo svg {
+            width: 64px;
+            height: 64px;
+        }
+
+        h1 {
+            font-family: Georgia, serif;
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        .tagline {
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+        }
+
+        .login-box {
+            background: rgba(45, 55, 72, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 32px;
+        }
+
+        .login-box p {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        input {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.2rem;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: rgba(0,0,0,0.2);
+            color: var(--text-primary);
+            text-align: center;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--green);
+        }
+
+        input::placeholder {
+            letter-spacing: normal;
+            text-transform: none;
+            font-weight: 400;
+            color: var(--text-muted);
+        }
+
+        button {
+            width: 100%;
+            padding: 16px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            background: var(--green);
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover { background: var(--green-light); }
+        button:disabled { background: var(--border); cursor: not-allowed; }
+
+        .error {
+            background: rgba(229, 62, 62, 0.1);
+            border: 1px solid rgba(229, 62, 62, 0.3);
+            color: #fc8181;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        .error.show { display: block; }
+
+        .footer {
+            margin-top: 32px;
+        }
+
+        .beta-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            background: var(--border);
+            border-radius: 6px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                <rect width="32" height="32" rx="8" fill="#2d3748"/>
+                <text x="4" y="23" font-family="Georgia, serif" font-size="18" font-weight="bold" fill="white">S</text>
+                <text x="14" y="23" font-family="Georgia, serif" font-size="18" font-weight="bold" fill="white">S</text>
+                <g transform="translate(9, 13)">
+                    <line x1="-2.5" y1="-2.5" x2="2.5" y2="2.5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/>
+                    <line x1="2.5" y1="-2.5" x2="-2.5" y2="2.5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/>
+                </g>
+                <g transform="translate(21, 13)">
+                    <polyline points="-3,0 -1,3 4,-3" fill="none" stroke="#38a169" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </g>
+            </svg>
+        </div>
+        <h1>StoryStamper</h1>
+        <p class="tagline">Beta Access</p>
+
+        <div class="login-box">
+            <p>Enter the beta PIN to continue</p>
+            <div class="error" id="error">Invalid PIN</div>
+            <form id="form">
+                <input type="text" id="pin" placeholder="Enter PIN" autocomplete="off" required />
+                <button type="submit" id="btn">Continue</button>
+            </form>
+        </div>
+
+        <div class="footer">
+            <span class="beta-badge">Private Beta</span>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('form');
+        const pin = document.getElementById('pin');
+        const btn = document.getElementById('btn');
+        const error = document.getElementById('error');
+
+        pin.addEventListener('input', e => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+
+        form.addEventListener('submit', async e => {
+            e.preventDefault();
+            error.classList.remove('show');
+            btn.disabled = true;
+            btn.textContent = 'Checking...';
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin: pin.value })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    window.location.href = '/';
+                } else {
+                    error.textContent = data.error || 'Invalid PIN';
+                    error.classList.add('show');
+                }
+            } catch (err) {
+                error.textContent = 'Connection error';
+                error.classList.add('show');
+            }
+            btn.disabled = false;
+            btn.textContent = 'Continue';
+        });
+    </script>
+</body>
+</html>`;

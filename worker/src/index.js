@@ -1,5 +1,8 @@
 // Static HTML files (embedded for single-worker deployment)
-import { INDEX_HTML, MANIFEST_JSON } from "./static.js";
+import { INDEX_HTML, LOGIN_HTML, MANIFEST_JSON } from "./static.js";
+
+// Beta access PIN - change this to whatever you want
+const BETA_PIN = "STAMPER2024";
 
 export default {
   async fetch(request, env) {
@@ -13,7 +16,7 @@ export default {
       });
     }
 
-    // Serve static assets (icons, manifest, favicon)
+    // Serve static assets (no auth needed)
     if (
       path.startsWith("/icons/") ||
       path === "/favicon.ico" ||
@@ -23,21 +26,21 @@ export default {
       return serveStaticAsset(path, env);
     }
 
-    // Main app page
-    if (request.method === "GET" && (path === "/" || path === "/index.html")) {
-      return serveHTML(INDEX_HTML);
+    // Login page (no auth needed)
+    if (path === "/login") {
+      return serveHTML(LOGIN_HTML);
     }
 
-    // API endpoint for fact-checking
-    if (request.method === "POST" && (path === "/" || path === "/api/check")) {
-      return handleFactCheck(request, env);
+    // Login API
+    if (path === "/api/login" && request.method === "POST") {
+      return handleLogin(request, env);
     }
 
-    // Health check
+    // Health check (no auth needed)
     if (request.method === "GET" && path === "/api/health") {
       return new Response(
         JSON.stringify({
-          version: "2.1",
+          version: "2.2",
           hasApiKey: !!env.GEMINI_API_KEY,
           timestamp: new Date().toISOString(),
         }),
@@ -50,9 +53,69 @@ export default {
       );
     }
 
+    // All other routes require PIN auth
+    if (!checkAuth(request)) {
+      return Response.redirect(new URL("/login", request.url).toString(), 302);
+    }
+
+    // Main app page
+    if (request.method === "GET" && (path === "/" || path === "/index.html")) {
+      return serveHTML(INDEX_HTML);
+    }
+
+    // API endpoint for fact-checking
+    if (request.method === "POST" && (path === "/" || path === "/api/check")) {
+      return handleFactCheck(request, env);
+    }
+
     return new Response("Not Found", { status: 404 });
   },
 };
+
+// ============ Auth Functions ============
+
+function checkAuth(request) {
+  const cookies = parseCookies(request.headers.get("Cookie") || "");
+  return cookies["ss_auth"] === "valid";
+}
+
+function handleLogin(request, env) {
+  return request
+    .json()
+    .then(({ pin }) => {
+      if (pin && pin.toUpperCase() === BETA_PIN) {
+        // Set cookie for 7 days
+        const cookie =
+          "ss_auth=valid; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=604800";
+        return new Response(JSON.stringify({ success: true }), {
+          headers: {
+            "Content-Type": "application/json",
+            "Set-Cookie": cookie,
+          },
+        });
+      }
+      return new Response(JSON.stringify({ error: "Invalid PIN" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    })
+    .catch(() => {
+      return new Response(JSON.stringify({ error: "Invalid request" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+}
+
+function parseCookies(cookieHeader) {
+  const cookies = {};
+  if (!cookieHeader) return cookies;
+  cookieHeader.split(";").forEach((cookie) => {
+    const [name, ...rest] = cookie.trim().split("=");
+    if (name) cookies[name] = rest.join("=");
+  });
+  return cookies;
+}
 
 // ============ Static File Serving ============
 
@@ -74,8 +137,6 @@ async function serveStaticAsset(path, env) {
       },
     });
   }
-
-  // For other static assets, return 404 (they'd need to be served from R2 or embedded)
   return new Response("Not Found", { status: 404 });
 }
 
