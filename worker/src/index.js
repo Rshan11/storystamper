@@ -1,5 +1,5 @@
 // Static HTML files (embedded for single-worker deployment)
-import { INDEX_HTML, LOGIN_HTML, MANIFEST_JSON } from "./static.js";
+import { INDEX_HTML, MANIFEST_JSON } from "./static.js";
 
 export default {
   async fetch(request, env) {
@@ -13,16 +13,7 @@ export default {
       });
     }
 
-    // Public routes (no auth required)
-    if (path === "/login" || path === "/login.html") {
-      return serveHTML(LOGIN_HTML);
-    }
-
-    if (path === "/api/login") {
-      return handleLogin(request, env);
-    }
-
-    // Serve static assets without auth (icons, manifest, etc.)
+    // Serve static assets (icons, manifest, favicon)
     if (
       path.startsWith("/icons/") ||
       path === "/favicon.ico" ||
@@ -32,23 +23,17 @@ export default {
       return serveStaticAsset(path, env);
     }
 
-    // All other routes require authentication
-    const authResult = await checkAuth(request, env);
-    if (!authResult.valid) {
-      return Response.redirect(new URL("/login", request.url).toString(), 302);
-    }
-
-    // Authenticated routes
-    if (path === "/" || path === "/index.html") {
+    // Main app page
+    if (request.method === "GET" && (path === "/" || path === "/index.html")) {
       return serveHTML(INDEX_HTML);
     }
 
-    // API endpoint for fact-checking (existing logic)
+    // API endpoint for fact-checking
     if (request.method === "POST" && (path === "/" || path === "/api/check")) {
       return handleFactCheck(request, env);
     }
 
-    // GET on root for API health check
+    // Health check
     if (request.method === "GET" && path === "/api/health") {
       return new Response(
         JSON.stringify({
@@ -69,153 +54,6 @@ export default {
   },
 };
 
-// ============ Auth Functions ============
-
-async function checkAuth(request, env) {
-  const cookies = parseCookies(request.headers.get("Cookie") || "");
-  const sessionToken = cookies["ss_session"];
-
-  if (!sessionToken) {
-    return { valid: false };
-  }
-
-  // Verify the session token
-  const isValid = await verifySessionToken(sessionToken, env);
-  return { valid: isValid };
-}
-
-async function handleLogin(request, env) {
-  if (request.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  try {
-    const { code } = await request.json();
-
-    if (!code || typeof code !== "string") {
-      return new Response(JSON.stringify({ error: "Invalid code format" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const normalizedCode = code.trim().toUpperCase();
-
-    // Check if code exists in KV
-    const codeStatus = await env.INVITE_CODES.get(normalizedCode);
-
-    if (!codeStatus || codeStatus !== "active") {
-      return new Response(JSON.stringify({ error: "Invalid invite code" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // Generate session token
-    const sessionToken = await generateSessionToken(normalizedCode, env);
-
-    // Set cookie (7 days expiry)
-    const maxAge = 7 * 24 * 60 * 60; // 7 days in seconds
-    const cookie = `ss_session=${sessionToken}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
-
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-        "Set-Cookie": cookie,
-      },
-    });
-  } catch (err) {
-    console.error("Login error:", err);
-    return new Response(JSON.stringify({ error: "Server error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-}
-
-async function generateSessionToken(code, env) {
-  const secret = env.COOKIE_SECRET || "default-secret-change-me";
-  const data = `${code}:${secret}`;
-
-  // Create HMAC-SHA256 hash
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(code));
-  const hashArray = Array.from(new Uint8Array(signature));
-  const hashHex = hashArray
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  // Token format: code:hash (so we can verify the code is still active)
-  return `${code}:${hashHex}`;
-}
-
-async function verifySessionToken(token, env) {
-  try {
-    const [code, providedHash] = token.split(":");
-
-    if (!code || !providedHash) {
-      return false;
-    }
-
-    // Verify the code is still active in KV
-    const codeStatus = await env.INVITE_CODES.get(code);
-    if (!codeStatus || codeStatus !== "active") {
-      return false;
-    }
-
-    // Verify the hash
-    const secret = env.COOKIE_SECRET || "default-secret-change-me";
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-
-    const signature = await crypto.subtle.sign(
-      "HMAC",
-      key,
-      encoder.encode(code),
-    );
-    const hashArray = Array.from(new Uint8Array(signature));
-    const expectedHash = hashArray
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-
-    return providedHash === expectedHash;
-  } catch {
-    return false;
-  }
-}
-
-function parseCookies(cookieHeader) {
-  const cookies = {};
-  if (!cookieHeader) return cookies;
-
-  cookieHeader.split(";").forEach((cookie) => {
-    const [name, ...rest] = cookie.trim().split("=");
-    if (name) {
-      cookies[name] = rest.join("=");
-    }
-  });
-
-  return cookies;
-}
-
 // ============ Static File Serving ============
 
 function serveHTML(html) {
@@ -228,7 +66,6 @@ function serveHTML(html) {
 }
 
 async function serveStaticAsset(path, env) {
-  // For manifest.json, return embedded version
   if (path === "/manifest.json") {
     return new Response(MANIFEST_JSON, {
       headers: {
@@ -238,9 +75,7 @@ async function serveStaticAsset(path, env) {
     });
   }
 
-  // For other static assets, we'd need to serve from R2 or embed them
-  // For now, return 404 for assets not embedded
-  // In production, you'd serve these from R2 or embed the binary data
+  // For other static assets, return 404 (they'd need to be served from R2 or embedded)
   return new Response("Not Found", { status: 404 });
 }
 
@@ -248,10 +83,7 @@ async function serveStaticAsset(path, env) {
 
 async function handleFactCheck(request, env) {
   try {
-    let step = "parsing formData";
     const formData = await request.formData();
-
-    step = "getting image";
     const imageFile = formData.get("image");
 
     if (!imageFile) {
@@ -261,7 +93,6 @@ async function handleFactCheck(request, env) {
       });
     }
 
-    step = "getting arrayBuffer";
     const arrayBuffer = await imageFile.arrayBuffer();
     const fileSizeKB = Math.round(arrayBuffer.byteLength / 1024);
 

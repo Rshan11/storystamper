@@ -10,13 +10,5 @@ PUBLIC_URL = "https://pub-048308ba112644d5bdd27ec1a7b14671.r2.dev"
 binding = "STAMPS_BUCKET"
 bucket_name = "storystamper-stamps"
 
-# KV namespace for invite codes
-# Create with: npx wrangler kv:namespace create INVITE_CODES
-# Then update the id below with the returned namespace ID
-[[kv_namespaces]]
-binding = "INVITE_CODES"
-id = "20f14385062e45a5b5beb2df715a34e2"
-
 # Secrets (set via wrangler secret put):
 # - GEMINI_API_KEY
-# - COOKIE_SECRET (for session token signing)
