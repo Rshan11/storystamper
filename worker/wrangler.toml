@@ -15,7 +15,7 @@ bucket_name = "storystamper-stamps"
 # Then update the id below with the returned namespace ID
 [[kv_namespaces]]
 binding = "INVITE_CODES"
-id = "YOUR_KV_NAMESPACE_ID"
+id = "20f14385062e45a5b5beb2df715a34e2"
 
 # Secrets (set via wrangler secret put):
 # - GEMINI_API_KEY
