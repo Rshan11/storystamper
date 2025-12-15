@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 60">
+  <!-- First S -->
+  <text x="5" y="46" font-family="Georgia, serif" font-size="52" font-weight="bold" fill="#2d3748">S</text>
+  <!-- Second S -->
+  <text x="38" y="46" font-family="Georgia, serif" font-size="52" font-weight="bold" fill="#2d3748">S</text>
+  
+  <!-- Red X centered on body of first S -->
+  <g transform="translate(21, 30)">
+    <line x1="-5" y1="-5" x2="5" y2="5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="5" y1="-5" x2="-5" y2="5" stroke="#e53e3e" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Green check centered on body of second S -->
+  <g transform="translate(54, 30)">
+    <polyline points="-5,0 -1.5,5 6,-5" fill="none" stroke="#38a169" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  
+  <!-- Wordmark -->
+  <text x="85" y="42" font-family="Georgia, serif" font-size="32" font-weight="bold" fill="#2d3748">StoryStamp</text>
+</svg>

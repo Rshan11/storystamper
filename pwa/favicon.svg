@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="#1a202c"/>
+  
+  <!-- First S -->
+  <text x="4" y="23" font-family="Georgia, serif" font-size="18" font-weight="bold" fill="white">S</text>
+  <!-- Second S -->
+  <text x="14" y="23" font-family="Georgia, serif" font-size="18" font-weight="bold" fill="white">S</text>
+  
+  <!-- Red X -->
+  <g transform="translate(9, 13)">
+    <line x1="-2.5" y1="-2.5" x2="2.5" y2="2.5" stroke="#e53e3e" stroke-width="2" stroke-linecap="round"/>
+    <line x1="2.5" y1="-2.5" x2="-2.5" y2="2.5" stroke="#e53e3e" stroke-width="2" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Green check -->
+  <g transform="translate(21, 13)">
+    <polyline points="-3,0 -1,3 4,-3" fill="none" stroke="#38a169" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
