@@ -2,7 +2,7 @@
 import { INDEX_HTML, LOGIN_HTML, MANIFEST_JSON } from "./static.js";
 
 // Beta access PIN - change this to whatever you want
-const BETA_PIN = "STAMPER2024";
+const BETA_PIN = "#STAMPERS2025";
 
 export default {
   async fetch(request, env) {
