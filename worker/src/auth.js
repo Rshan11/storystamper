@@ -38,11 +38,12 @@ function normalizeEmail(email) {
 async function createSession(env, userId, client) {
   const token = randomToken(32);
   const now = nowSeconds();
-  await env.DB.prepare(
-    "INSERT INTO sessions (token_hash, user_id, client, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-  )
-    .bind(await sha256Hex(token), userId, client, now, now + SESSION_DAYS * 86400)
-    .run();
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM sessions WHERE user_id = ? AND expires_at <= ?").bind(userId, now),
+    env.DB.prepare(
+      "INSERT INTO sessions (token_hash, user_id, client, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+    ).bind(await sha256Hex(token), userId, client, now, now + SESSION_DAYS * 86400),
+  ]);
   return token;
 }
 

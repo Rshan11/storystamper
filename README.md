@@ -1,117 +1,128 @@
-# StoryStamper - Setup Guide
+# StoryStamper
 
-## What You Need
+Screenshot a social media post → StoryStamper checks it against current, reputable sources
+(Gemini + Google Search) → you get a verdict stamped onto the image to share.
 
-1. **Cloudflare account** (you have this)
-2. **Google AI API key** for Gemini - https://aistudio.google.com/apikey
-3. **R2 bucket** for storing stamped images
-
----
-
-## Step 1: Get Gemini API Key
-
-1. Go to https://aistudio.google.com/apikey
-2. Click "Create API Key"
-3. Copy the key somewhere safe
-
-### AI model
-
-The worker uses **`gemini-3.8-flash`** with **Google Search grounding**, so verdicts are
-checked against live web sources (shown under "Sources" in the app) instead of the model's
-memory. If that model is unavailable it automatically falls back to `gemini-3.6-flash`.
-
-To change models later, edit `GEMINI_MODEL` in `worker/wrangler.toml` and redeploy.
-Check https://aistudio.google.com/docs/deprecations for shutdown dates.
-Hit `/api/health` to see which model is configured.
+```
+worker/   Cloudflare Worker: website, API, accounts (D1), AI fact-checking
+ios/      Native SwiftUI iPhone app + Share extension (see ios/README.md for TestFlight)
+```
 
 ---
 
-## Step 2: Create R2 Bucket
+## How it fits together
 
-1. In Cloudflare dashboard → R2
-2. Create bucket named `hoax-stamps`
-3. Under bucket settings → Public Access → Enable (so images can be viewed)
-4. Copy the public URL (something like `https://pub-xxxxx.r2.dev`)
+| Piece | What it does |
+|---|---|
+| **Website** (`/`, `/login`) | Served by the worker. Email + password accounts. |
+| **iPhone app** | Email + password **or** Sign in with Apple. "Share → StoryStamper" from Photos. |
+| **Accounts** | Cloudflare D1 database (`worker/migrations`). Invite code needed to sign up. |
+| **Fact-check** | `POST /api/check`. `gemini-3.8-flash` with Google Search grounding, falls back to `gemini-3.6-flash`. |
+| **Limits** | `DAILY_CHECK_LIMIT` checks per user per UTC day (default 25). |
 
 ---
 
-## Step 3: Deploy the Worker
+## Backend setup (one time)
+
+You need: Cloudflare account, Node 20+, a Gemini API key from https://aistudio.google.com/apikey
 
 ```bash
 cd worker
+npm install
 
-# Install wrangler if needed
-npm install -g wrangler
+# 1. Log in to Cloudflare
+npx wrangler login
 
-# Login to Cloudflare
-wrangler login
+# 2. Create the accounts database, then paste the printed database_id
+#    into wrangler.toml (replace REPLACE_WITH_YOUR_D1_DATABASE_ID)
+npx wrangler d1 create storystamper
 
-# Set your Gemini API key as a secret
-wrangler secret put GEMINI_API_KEY
-# (paste your key when prompted)
+# 3. Create the tables
+npm run db:migrate:remote
 
-# Update wrangler.toml with your R2 public URL
-# Change PUBLIC_URL = "https://your-public-bucket-url.r2.dev"
+# 4. Secrets
+npx wrangler secret put GEMINI_API_KEY      # paste your Gemini key
+openssl rand -hex 32                        # copy the output...
+npx wrangler secret put ADMIN_TOKEN         # ...and paste it here. Keep it somewhere safe.
 
-# Deploy
-wrangler deploy
+# 5. Deploy
+npm run deploy
 ```
 
-Note the worker URL it gives you (something like `https://hoax-checker.your-subdomain.workers.dev`)
+Check it's alive: open `https://<your-worker>.workers.dev/api/health`.
+You should see `"hasApiKey": true, "hasDatabase": true`.
+
+> The old beta PIN is gone. Anyone using the old site has to create an account.
+
+### Settings in `worker/wrangler.toml`
+
+| Var | Default | Meaning |
+|---|---|---|
+| `GEMINI_MODEL` | `gemini-3.8-flash` | AI model. Check https://aistudio.google.com/docs/deprecations before it's retired. |
+| `DAILY_CHECK_LIMIT` | `25` | Checks per user per day |
+| `INVITE_REQUIRED` | `true` | Set `false` to allow open sign-up |
+| `APPLE_BUNDLE_ID` | `com.storystamper.app` | Must match the iOS app's bundle ID |
+| `SUPPORT_EMAIL` | empty | Shown on `/support` (App Store Connect needs a support URL) |
 
 ---
 
-## Step 4: Deploy the PWA
+## Invite codes
 
-1. Open `pwa/index.html`
-2. Find `const WORKER_URL = ` near the top of the script
-3. Replace with your actual worker URL
-
-Then deploy to Cloudflare Pages:
+Create codes (replace the URL and token):
 
 ```bash
-cd pwa
+curl -X POST https://storystamper.ryan-b00.workers.dev/api/admin/invites \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"count": 5, "maxUses": 1, "note": "family"}'
+```
 
-# Create a new Pages project
-wrangler pages project create storystamper
+- `count`: how many codes (max 100). `maxUses`: how many accounts each code can create.
+- One shared code for a group: `{"count": 1, "maxUses": 50, "note": "church group"}`
+- List codes and usage: same URL with `GET` (drop `-X POST` and `-d`).
+- Share link that pre-fills the code: `https://<your-worker>/login?invite=STAMP-XXXX-XXXX`
 
-# Deploy
-wrangler pages deploy . --project-name=storystamper
+---
+
+## Local development
+
+```bash
+cd worker
+printf 'GEMINI_API_KEY=your-key\nADMIN_TOKEN=dev-token\n' > .dev.vars
+npm run db:migrate:local
+npm run dev            # http://localhost:8787
+npm test               # Sign in with Apple unit tests
 ```
 
 ---
 
-## Step 5: Test It
+## API (used by the iOS app)
 
-1. Go to your Pages URL
-2. Upload a screenshot of a sketchy social media post
-3. Wait for the verdict
-4. Save the stamped image
+All requests from the app send `X-Client: ios` and `Authorization: Bearer <token>`.
 
----
-
-## Adding to Home Screen (iOS)
-
-1. Open the site in Safari
-2. Tap the Share button
-3. Tap "Add to Home Screen"
-4. Now it works like an app
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| POST | `/api/auth/signup` | `{email, password, inviteCode}` | returns `{token, user}` |
+| POST | `/api/auth/login` | `{email, password}` | returns `{token, user}` |
+| POST | `/api/auth/apple` | `{identityToken, nonce, authorizationCode?, name?, inviteCode?}` | `403 code=invite_required` for new users with no code |
+| POST | `/api/auth/logout` | | |
+| GET | `/api/me` | | user and today's usage |
+| DELETE | `/api/account` | | deletes everything (App Store requirement) |
+| POST | `/api/check` | multipart `image` | `{verdict, reasons, claimSummary, sources, usage}`; `429 code=daily_limit` |
 
 ---
 
 ## Costs
 
-- **Gemini API**: a few tenths of a cent per check, plus Google Search grounding fees beyond the free daily allowance (see https://ai.google.dev/pricing)
-- **R2**: Free tier covers 10GB storage
-- **Workers**: Free tier covers 100k requests/day
-- **Pages**: Free
+- **Gemini**: a few tenths of a cent per check, plus Google Search grounding fees past the free daily allowance (https://ai.google.dev/pricing). The daily limit caps the worst case at users × limit.
+- **Workers, D1**: free tiers cover a beta easily.
+- **Apple Developer Program**: $99/year (needed for TestFlight).
 
 ---
 
-## TODO for Later
+## TODO
 
-- [ ] Add QR code to stamp
-- [ ] Better stamp design
-- [ ] Rate limiting per IP
-- [ ] Usage tracking
-- [ ] Share directly from result
+- [ ] Password reset (needs an email provider, e.g. Resend or Postmark)
+- [ ] Crisp 1024px app icon (current one is upscaled from 512px)
+- [ ] Check history
+- [ ] QR code / link on the stamp

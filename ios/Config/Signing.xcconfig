@@ -1,0 +1,15 @@
+// ===== EDIT THESE BEFORE YOUR FIRST BUILD =====
+
+// Your 10-character Apple Team ID (developer.apple.com -> Account -> Membership details)
+DEVELOPMENT_TEAM =
+
+// App bundle ID. Must match APPLE_BUNDLE_ID in worker/wrangler.toml.
+// If App Store Connect says it's taken, change it here AND in wrangler.toml.
+APP_BUNDLE_ID = com.storystamper.app
+
+// Shared container used by the app and its Share extension (keeps you signed in for both)
+APP_GROUP_ID = group.$(APP_BUNDLE_ID)
+
+// Bump CURRENT_PROJECT_VERSION for every TestFlight upload
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 1
