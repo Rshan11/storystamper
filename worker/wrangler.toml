@@ -2,15 +2,40 @@ name = "storystamper"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
 
+# Icons/favicons in ./public are served directly (before the worker runs)
+[assets]
+directory = "./public"
+
 [vars]
 # AI model used for fact-checking (falls back to gemini-3.6-flash if unavailable)
 GEMINI_MODEL = "gemini-3.8-flash"
+# Checks each user can run per UTC day
+DAILY_CHECK_LIMIT = "25"
+# "true" = new accounts need an invite code
+INVITE_REQUIRED = "true"
+# iOS app bundle ID(s) accepted for Sign in with Apple (comma-separated)
+APPLE_BUNDLE_ID = "com.storystamper.app"
+# Shown on /support (App Store Connect requires a support URL)
+SUPPORT_EMAIL = ""
 PUBLIC_URL = "https://pub-048308ba112644d5bdd27ec1a7b14671.r2.dev"
+
+# Accounts database. Create with: npx wrangler d1 create storystamper
+# then paste the database_id it prints below.
+[[d1_databases]]
+binding = "DB"
+database_name = "storystamper"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "migrations"
 
 # R2 bucket binding
 [[r2_buckets]]
 binding = "STAMPS_BUCKET"
 bucket_name = "storystamper-stamps"
 
-# Secrets (set via wrangler secret put):
-# - GEMINI_API_KEY
+# Secrets (set via: npx wrangler secret put NAME):
+# - GEMINI_API_KEY      Google AI Studio key
+# - ADMIN_TOKEN         long random string; lets you create invite codes
+# Optional (revoke Apple tokens when users delete their account):
+# - APPLE_TEAM_ID       10-character Apple Team ID
+# - APPLE_KEY_ID        Key ID of a "Sign in with Apple" key
+# - APPLE_PRIVATE_KEY   full contents of that key's .p8 file

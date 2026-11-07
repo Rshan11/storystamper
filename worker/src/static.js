@@ -383,6 +383,24 @@ export const INDEX_HTML = `<!doctype html>
             font-style: italic;
         }
 
+        .account-bar {
+            margin-top: 12px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .account-links {
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .account-links a { color: var(--text-muted); }
+
         .actions {
             display: flex;
             gap: 12px;
@@ -547,6 +565,16 @@ export const INDEX_HTML = `<!doctype html>
 
     <footer class="footer">
         <span class="beta-badge">Beta</span>
+        <div class="account-bar">
+            <span id="accountEmail"></span>
+            <span id="usageText"></span>
+        </div>
+        <div class="account-links">
+            <a href="#" id="logoutLink">Sign out</a> &middot;
+            <a href="#" id="deleteLink">Delete account</a> &middot;
+            <a href="/privacy">Privacy</a> &middot;
+            <a href="/support">Support</a>
+        </div>
     </footer>
 
     <canvas id="stampCanvas"></canvas>
@@ -597,12 +625,60 @@ export const INDEX_HTML = `<!doctype html>
             fileInput.value = "";
         });
 
-        saveBtn.addEventListener("click", () => {
-            if (currentStampedDataUrl) {
-                const link = document.createElement("a");
-                link.download = "storystamper-" + Date.now() + ".png";
-                link.href = currentStampedDataUrl;
-                link.click();
+        saveBtn.addEventListener("click", async () => {
+            if (!currentStampedDataUrl) return;
+            const filename = "storystamper-" + Date.now() + ".png";
+            try {
+                const blob = await (await fetch(currentStampedDataUrl)).blob();
+                const shareFile = new File([blob], filename, { type: "image/png" });
+                if (navigator.canShare && navigator.canShare({ files: [shareFile] })) {
+                    await navigator.share({ files: [shareFile], title: "StoryStamper" });
+                    return;
+                }
+            } catch (err) {
+                if (err && err.name === "AbortError") return;
+            }
+            const link = document.createElement("a");
+            link.download = filename;
+            link.href = currentStampedDataUrl;
+            link.click();
+        });
+
+        // ---- Account ----
+        const accountEmail = document.getElementById("accountEmail");
+        const usageText = document.getElementById("usageText");
+
+        function showUsage(usage) {
+            usageText.textContent = usage.remaining + " of " + usage.limit + " checks left today";
+        }
+
+        async function loadAccount() {
+            try {
+                const res = await fetch("/api/me", { credentials: "same-origin" });
+                if (res.status === 401) { window.location.href = "/login"; return; }
+                const data = await res.json();
+                accountEmail.textContent = data.user.email || "Signed in with Apple";
+                showUsage(data.user.usage);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+        loadAccount();
+
+        document.getElementById("logoutLink").addEventListener("click", async (e) => {
+            e.preventDefault();
+            await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+            window.location.href = "/login";
+        });
+
+        document.getElementById("deleteLink").addEventListener("click", async (e) => {
+            e.preventDefault();
+            if (!confirm("Permanently delete your StoryStamper account? This can't be undone.")) return;
+            const res = await fetch("/api/account", { method: "DELETE", credentials: "same-origin" });
+            if (res.ok) {
+                window.location.href = "/login";
+            } else {
+                alert("Couldn't delete your account. Please try again.");
             }
         });
 
@@ -697,15 +773,16 @@ export const INDEX_HTML = `<!doctype html>
                     credentials: "same-origin",
                 });
 
-                if (response.status === 401 || response.status === 302) {
+                if (response.status === 401) {
                     window.location.href = "/login";
                     return;
                 }
 
-                if (!response.ok) throw new Error("Server error: " + response.status);
-
-                const data = await response.json();
-                if (data.error) throw new Error(data.error);
+                const data = await response.json().catch(() => ({}));
+                if (data.usage) showUsage(data.usage);
+                if (!response.ok || data.error) {
+                    throw new Error(data.error || "Server error: " + response.status);
+                }
 
                 await generateStampedImage(file, data);
                 showResult();
@@ -719,14 +796,6 @@ export const INDEX_HTML = `<!doctype html>
             return new Promise((resolve, reject) => {
                 const img = new Image();
                 img.onload = () => {
-                    const stampHeight = 160;
-                    canvas.width = img.width;
-                    canvas.height = img.height + stampHeight;
-
-                    ctx.drawImage(img, 0, 0);
-                    ctx.fillStyle = "#1a202c";
-                    ctx.fillRect(0, img.height, canvas.width, stampHeight);
-
                     const verdictColors = {
                         "Verified True": "#276749",
                         "Likely True": "#38a169",
@@ -735,25 +804,70 @@ export const INDEX_HTML = `<!doctype html>
                         "Verified False": "#c53030",
                         Satire: "#805ad5",
                     };
-
                     const verdictColor = verdictColors[data.verdict] || "#718096";
-
-                    ctx.fillStyle = verdictColor;
-                    ctx.font = "bold 24px Georgia, serif";
-                    ctx.fillText(data.verdict.toUpperCase(), 16, img.height + 35);
-
-                    ctx.fillStyle = "#a0aec0";
-                    ctx.font = "14px -apple-system, BlinkMacSystemFont, sans-serif";
-
                     const reasons = data.reasons || [];
-                    reasons.slice(0, 3).forEach((reason, i) => {
-                        const truncated = reason.length > 55 ? reason.substring(0, 52) + "..." : reason;
-                        ctx.fillText("• " + truncated, 16, img.height + 65 + i * 24);
+
+                    // Scale text to the screenshot so it's readable on any size
+                    const scale = Math.max(1, img.width / 420);
+                    const pad = 16 * scale;
+                    const lineHeight = 20 * scale;
+                    const reasonFont = Math.round(14 * scale) + "px -apple-system, BlinkMacSystemFont, sans-serif";
+                    const maxTextWidth = img.width - pad * 2;
+
+                    function wrapLines(text, maxLines) {
+                        ctx.font = reasonFont;
+                        const words = ("\u2022 " + text).split(" ");
+                        const lines = [];
+                        let line = "";
+                        for (const word of words) {
+                            const test = line ? line + " " + word : word;
+                            if (ctx.measureText(test).width > maxTextWidth && line) {
+                                lines.push(line);
+                                line = word;
+                            } else {
+                                line = test;
+                            }
+                        }
+                        if (line) lines.push(line);
+                        if (lines.length > maxLines) {
+                            lines.length = maxLines;
+                            lines[maxLines - 1] = lines[maxLines - 1].replace(/\\s*\\S*$/, "") + "\u2026";
+                        }
+                        return lines;
+                    }
+
+                    const reasonLines = reasons.slice(0, 3).map((r) => wrapLines(r, 2));
+                    const totalReasonLines = reasonLines.reduce((n, l) => n + l.length, 0);
+                    const stampHeight = pad + 30 * scale + totalReasonLines * lineHeight + 8 * scale * reasonLines.length + 44 * scale;
+
+                    canvas.width = img.width;
+                    canvas.height = img.height + stampHeight;
+
+                    ctx.drawImage(img, 0, 0);
+                    ctx.fillStyle = "#1a202c";
+                    ctx.fillRect(0, img.height, canvas.width, stampHeight);
+                    ctx.fillStyle = verdictColor;
+                    ctx.fillRect(0, img.height, canvas.width, 4 * scale);
+
+                    let y = img.height + pad + 22 * scale;
+                    ctx.fillStyle = verdictColor;
+                    ctx.font = "bold " + Math.round(24 * scale) + "px Georgia, serif";
+                    ctx.fillText(data.verdict.toUpperCase(), pad, y);
+                    y += 14 * scale;
+
+                    ctx.fillStyle = "#cbd5e0";
+                    ctx.font = reasonFont;
+                    reasonLines.forEach((lines) => {
+                        y += 8 * scale;
+                        lines.forEach((line) => {
+                            y += lineHeight;
+                            ctx.fillText(line, pad, y);
+                        });
                     });
 
-                    ctx.fillStyle = "#4a5568";
-                    ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif";
-                    ctx.fillText("Verified by StoryStamper", 16, img.height + stampHeight - 12);
+                    ctx.fillStyle = "#718096";
+                    ctx.font = Math.round(12 * scale) + "px -apple-system, BlinkMacSystemFont, sans-serif";
+                    ctx.fillText("Checked by StoryStamper \u00b7 " + new Date().toLocaleDateString(), pad, img.height + stampHeight - 10 * scale);
 
                     currentStampedDataUrl = canvas.toDataURL("image/png");
                     resultImage.src = currentStampedDataUrl;
@@ -827,20 +941,7 @@ export const MANIFEST_JSON = `{
       "type": "image/png",
       "purpose": "maskable"
     }
-  ],
-  "share_target": {
-    "action": "/",
-    "method": "POST",
-    "enctype": "multipart/form-data",
-    "params": {
-      "files": [
-        {
-          "name": "image",
-          "accept": ["image/*"]
-        }
-      ]
-    }
-  }
+  ]
 }`;
 
 export const LOGIN_HTML = `<!doctype html>
@@ -849,143 +950,65 @@ export const LOGIN_HTML = `<!doctype html>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#1a202c" />
-    <title>Login - StoryStamper</title>
-    <link rel="icon" href="favicon.ico" sizes="48x48" />
-    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <title>Sign in - StoryStamper</title>
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-
         :root {
-            --bg-primary: #1a202c;
-            --green: #38a169;
-            --green-light: #48bb78;
-            --text-primary: #f7fafc;
-            --text-secondary: #a0aec0;
-            --text-muted: #718096;
-            --border: #2d3748;
-            --red: #e53e3e;
+            --bg-primary: #1a202c; --green: #38a169; --green-light: #48bb78;
+            --text-primary: #f7fafc; --text-secondary: #a0aec0; --text-muted: #718096;
+            --border: #2d3748; --red: #e53e3e;
         }
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
-
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
-            min-height: 100vh;
-            color: var(--text-primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+            background: var(--bg-primary); min-height: 100vh; color: var(--text-primary);
+            display: flex; align-items: center; justify-content: center; padding: 20px;
         }
-
-        .container {
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-
-        .logo {
-            margin-bottom: 24px;
-        }
-
-        .logo svg {
-            width: 64px;
-            height: 64px;
-        }
-
-        h1 {
-            font-family: Georgia, serif;
-            font-size: 2rem;
-            margin-bottom: 8px;
-        }
-
-        .tagline {
-            color: var(--text-secondary);
-            margin-bottom: 40px;
-        }
-
+        .container { width: 100%; max-width: 400px; text-align: center; }
+        .logo { margin-bottom: 24px; }
+        .logo svg { width: 64px; height: 64px; }
+        h1 { font-family: Georgia, serif; font-size: 2rem; margin-bottom: 8px; }
+        .tagline { color: var(--text-secondary); margin-bottom: 32px; }
         .login-box {
-            background: rgba(45, 55, 72, 0.5);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 32px;
+            background: rgba(45, 55, 72, 0.5); border: 1px solid var(--border);
+            border-radius: 20px; padding: 28px; text-align: left;
         }
-
-        .login-box p {
-            color: var(--text-secondary);
-            margin-bottom: 24px;
+        .tabs { display: flex; gap: 8px; margin-bottom: 24px; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 12px; }
+        .tab {
+            flex: 1; padding: 10px; border: none; border-radius: 9px; background: transparent;
+            color: var(--text-secondary); font-weight: 600; font-size: 0.9rem; cursor: pointer;
         }
-
+        .tab.active { background: var(--border); color: var(--text-primary); }
+        label { display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; font-weight: 500; }
         input {
-            width: 100%;
-            padding: 16px;
-            font-size: 1.2rem;
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            background: rgba(0,0,0,0.2);
-            color: var(--text-primary);
-            text-align: center;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            font-weight: 600;
-            margin-bottom: 16px;
+            width: 100%; padding: 14px; font-size: 1rem; border: 2px solid var(--border);
+            border-radius: 12px; background: rgba(0,0,0,0.2); color: var(--text-primary); margin-bottom: 16px;
         }
-
-        input:focus {
-            outline: none;
-            border-color: var(--green);
+        input:focus { outline: none; border-color: var(--green); }
+        input::placeholder { color: var(--text-muted); }
+        .signup-only { display: none; }
+        .mode-signup .signup-only { display: block; }
+        .hint { font-size: 0.75rem; color: var(--text-muted); margin: -10px 0 16px; }
+        button[type=submit] {
+            width: 100%; padding: 16px; font-size: 1rem; font-weight: 600; border: none;
+            border-radius: 12px; background: var(--green); color: white; cursor: pointer; margin-top: 4px;
         }
-
-        input::placeholder {
-            letter-spacing: normal;
-            text-transform: none;
-            font-weight: 400;
-            color: var(--text-muted);
-        }
-
-        button {
-            width: 100%;
-            padding: 16px;
-            font-size: 1rem;
-            font-weight: 600;
-            border: none;
-            border-radius: 12px;
-            background: var(--green);
-            color: white;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        button:hover { background: var(--green-light); }
-        button:disabled { background: var(--border); cursor: not-allowed; }
-
+        button[type=submit]:hover { background: var(--green-light); }
+        button[type=submit]:disabled { background: var(--border); cursor: not-allowed; }
         .error {
-            background: rgba(229, 62, 62, 0.1);
-            border: 1px solid rgba(229, 62, 62, 0.3);
-            color: #fc8181;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            display: none;
+            background: rgba(229, 62, 62, 0.1); border: 1px solid rgba(229, 62, 62, 0.3);
+            color: #fc8181; padding: 12px; border-radius: 8px; margin-bottom: 16px; display: none; font-size: 0.9rem;
         }
-
         .error.show { display: block; }
-
-        .footer {
-            margin-top: 32px;
-        }
-
+        .footer { margin-top: 28px; font-size: 0.8rem; color: var(--text-muted); }
+        .footer a { color: var(--text-muted); }
         .beta-badge {
-            display: inline-block;
-            padding: 6px 12px;
-            background: var(--border);
-            border-radius: 6px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            color: var(--text-muted);
-            letter-spacing: 1px;
-            text-transform: uppercase;
+            display: inline-block; padding: 6px 12px; background: var(--border); border-radius: 6px;
+            font-size: 0.7rem; font-weight: 600; color: var(--text-muted); letter-spacing: 1px;
+            text-transform: uppercase; margin-bottom: 12px;
         }
     </style>
 </head>
@@ -1006,58 +1029,172 @@ export const LOGIN_HTML = `<!doctype html>
             </svg>
         </div>
         <h1>StoryStamper</h1>
-        <p class="tagline">Beta Access</p>
+        <p class="tagline">Upload. Verify. Know the truth.</p>
 
-        <div class="login-box">
-            <p>Enter the beta PIN to continue</p>
-            <div class="error" id="error">Invalid PIN</div>
+        <div class="login-box" id="box">
+            <div class="tabs">
+                <button type="button" class="tab active" id="tabLogin">Sign in</button>
+                <button type="button" class="tab" id="tabSignup">Create account</button>
+            </div>
+            <div class="error" id="error"></div>
             <form id="form">
-                <input type="text" id="pin" placeholder="Enter PIN" autocomplete="off" required />
-                <button type="submit" id="btn">Continue</button>
+                <label for="email">Email</label>
+                <input type="email" id="email" autocomplete="email" placeholder="you@example.com" required />
+                <label for="password">Password</label>
+                <input type="password" id="password" autocomplete="current-password" placeholder="Password" required minlength="8" />
+                <p class="hint signup-only">At least 8 characters.</p>
+                <div class="signup-only">
+                    <label for="invite">Invite code</label>
+                    <input type="text" id="invite" autocomplete="off" autocapitalize="characters" placeholder="STAMP-XXXX-XXXX" />
+                </div>
+                <button type="submit" id="btn">Sign in</button>
             </form>
         </div>
 
         <div class="footer">
-            <span class="beta-badge">Private Beta</span>
+            <span class="beta-badge">Private Beta</span><br />
+            <a href="/privacy">Privacy</a> &middot; <a href="/support">Support</a>
         </div>
     </div>
 
     <script>
+        const box = document.getElementById('box');
         const form = document.getElementById('form');
-        const pin = document.getElementById('pin');
+        const email = document.getElementById('email');
+        const password = document.getElementById('password');
+        const invite = document.getElementById('invite');
         const btn = document.getElementById('btn');
         const error = document.getElementById('error');
+        const tabLogin = document.getElementById('tabLogin');
+        const tabSignup = document.getElementById('tabSignup');
+        let mode = 'login';
 
-        pin.addEventListener('input', e => {
-            e.target.value = e.target.value.toUpperCase();
-        });
+        function setMode(m) {
+            mode = m;
+            box.classList.toggle('mode-signup', m === 'signup');
+            tabLogin.classList.toggle('active', m === 'login');
+            tabSignup.classList.toggle('active', m === 'signup');
+            btn.textContent = m === 'signup' ? 'Create account' : 'Sign in';
+            password.autocomplete = m === 'signup' ? 'new-password' : 'current-password';
+            invite.required = m === 'signup';
+            error.classList.remove('show');
+        }
+        tabLogin.addEventListener('click', () => setMode('login'));
+        tabSignup.addEventListener('click', () => setMode('signup'));
+        if (new URLSearchParams(location.search).get('invite')) {
+            invite.value = new URLSearchParams(location.search).get('invite');
+            setMode('signup');
+        }
 
         form.addEventListener('submit', async e => {
             e.preventDefault();
             error.classList.remove('show');
             btn.disabled = true;
-            btn.textContent = 'Checking...';
-
+            const label = btn.textContent;
+            btn.textContent = mode === 'signup' ? 'Creating account...' : 'Signing in...';
             try {
-                const res = await fetch('/api/login', {
+                const body = { email: email.value, password: password.value };
+                if (mode === 'signup') body.inviteCode = invite.value;
+                const res = await fetch(mode === 'signup' ? '/api/auth/signup' : '/api/auth/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pin: pin.value })
+                    credentials: 'same-origin',
+                    body: JSON.stringify(body)
                 });
-                const data = await res.json();
-                if (data.success) {
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.success) {
                     window.location.href = '/';
-                } else {
-                    error.textContent = data.error || 'Invalid PIN';
-                    error.classList.add('show');
+                    return;
                 }
+                error.textContent = data.error || 'Something went wrong. Please try again.';
+                error.classList.add('show');
             } catch (err) {
-                error.textContent = 'Connection error';
+                error.textContent = 'Connection error. Check your internet and try again.';
                 error.classList.add('show');
             }
             btn.disabled = false;
-            btn.textContent = 'Continue';
+            btn.textContent = label;
         });
     </script>
+</body>
+</html>`;
+
+export const PRIVACY_HTML = `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy - StoryStamper</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; background: #1a202c; color: #e2e8f0; line-height: 1.6; padding: 32px 20px; }
+        main { max-width: 680px; margin: 0 auto; }
+        h1 { font-family: Georgia, serif; margin-bottom: 4px; }
+        h2 { margin-top: 28px; font-size: 1.1rem; color: #f7fafc; }
+        p, li { color: #a0aec0; }
+        a { color: #48bb78; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Privacy Policy</h1>
+    <p>Last updated: November 2026</p>
+
+    <h2>What we collect</h2>
+    <ul>
+        <li><strong>Account details:</strong> your email address and a securely hashed password, or the identifier Apple provides if you use Sign in with Apple. If you choose "Hide My Email", we only receive Apple's private relay address.</li>
+        <li><strong>Screenshots you submit:</strong> sent to our fact-checking service to produce a verdict. We do not store your screenshots on our servers after the check completes.</li>
+        <li><strong>Usage counts:</strong> how many checks you run each day, so we can apply fair-use limits.</li>
+    </ul>
+
+    <h2>How screenshots are processed</h2>
+    <p>Screenshots are analyzed by Google's Gemini API, which may use Google Search to look up the claim. Google processes this data under the <a href="https://ai.google.dev/gemini-api/terms">Gemini API terms</a>. Do not submit screenshots containing private or sensitive personal information.</p>
+
+    <h2>What we don't do</h2>
+    <ul>
+        <li>We don't sell your data or use it for advertising.</li>
+        <li>We don't use third-party analytics or tracking.</li>
+    </ul>
+
+    <h2>Deleting your account</h2>
+    <p>You can delete your account at any time from the account menu in the app or on the website. This permanently removes your account, sessions and usage history. If you used Sign in with Apple, we also revoke StoryStamper's access to your Apple ID.</p>
+
+    <h2>Contact</h2>
+    <p>Questions? See our <a href="/support">support page</a>.</p>
+</main>
+</body>
+</html>`;
+
+export const SUPPORT_HTML = `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Support - StoryStamper</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; background: #1a202c; color: #e2e8f0; line-height: 1.6; padding: 32px 20px; }
+        main { max-width: 680px; margin: 0 auto; }
+        h1 { font-family: Georgia, serif; }
+        h2 { margin-top: 28px; font-size: 1.1rem; color: #f7fafc; }
+        p, li { color: #a0aec0; }
+        a { color: #48bb78; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>StoryStamper Support</h1>
+    <p>StoryStamper checks screenshots of social media posts against current, reputable sources and gives you a verdict you can share.</p>
+
+    <h2>Common questions</h2>
+    <ul>
+        <li><strong>How do I get an invite code?</strong> StoryStamper is in private beta. Ask the person who invited you to the beta.</li>
+        <li><strong>Why did I hit a limit?</strong> Each account gets a set number of checks per day. The limit resets at midnight UTC.</li>
+        <li><strong>Is the verdict always right?</strong> No. StoryStamper uses AI and web search, and it can make mistakes. Always read the linked sources.</li>
+        <li><strong>How do I delete my account?</strong> Open the account menu and choose "Delete account".</li>
+    </ul>
+
+    <h2>Contact</h2>
+    <!--CONTACT-->
+    <p><a href="/privacy">Privacy Policy</a></p>
+</main>
 </body>
 </html>`;
