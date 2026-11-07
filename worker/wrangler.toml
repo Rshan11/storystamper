@@ -3,6 +3,8 @@ main = "src/index.js"
 compatibility_date = "2024-01-01"
 
 [vars]
+# AI model used for fact-checking (falls back to gemini-3.6-flash if unavailable)
+GEMINI_MODEL = "gemini-3.8-flash"
 PUBLIC_URL = "https://pub-048308ba112644d5bdd27ec1a7b14671.r2.dev"
 
 # R2 bucket binding

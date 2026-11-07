@@ -341,6 +341,48 @@ export const INDEX_HTML = `<!doctype html>
             vertical-align: middle;
         }
 
+        .sources {
+            background: rgba(45, 55, 72, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 24px;
+            display: none;
+        }
+
+        .sources h3 {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .sources ul { list-style: none; }
+
+        .sources li {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
+
+        .sources li:last-child { border-bottom: none; padding-bottom: 0; }
+
+        .sources a {
+            color: var(--green-light);
+            text-decoration: none;
+            word-break: break-word;
+        }
+
+        .claim-summary {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            font-style: italic;
+        }
+
         .actions {
             display: flex;
             gap: 12px;
@@ -481,7 +523,13 @@ export const INDEX_HTML = `<!doctype html>
 
             <div class="reasons">
                 <h3>Analysis</h3>
+                <p class="claim-summary" id="claimSummary"></p>
                 <ul id="reasonsList"></ul>
+            </div>
+
+            <div class="sources" id="sourcesBox">
+                <h3>Sources</h3>
+                <ul id="sourcesList"></ul>
             </div>
 
             <div class="actions">
@@ -511,6 +559,9 @@ export const INDEX_HTML = `<!doctype html>
         const resultImage = document.getElementById("resultImage");
         const verdictBadge = document.getElementById("verdictBadge");
         const reasonsList = document.getElementById("reasonsList");
+        const claimSummary = document.getElementById("claimSummary");
+        const sourcesBox = document.getElementById("sourcesBox");
+        const sourcesList = document.getElementById("sourcesList");
         const saveBtn = document.getElementById("saveBtn");
         const newCheckBtn = document.getElementById("newCheckBtn");
         const error = document.getElementById("error");
@@ -716,6 +767,23 @@ export const INDEX_HTML = `<!doctype html>
                         li.textContent = reason;
                         reasonsList.appendChild(li);
                     });
+
+                    claimSummary.textContent = data.claimSummary || "";
+                    claimSummary.style.display = data.claimSummary ? "block" : "none";
+
+                    const sources = data.sources || [];
+                    sourcesList.innerHTML = "";
+                    sources.forEach((src) => {
+                        const li = document.createElement("li");
+                        const a = document.createElement("a");
+                        a.href = src.url;
+                        a.target = "_blank";
+                        a.rel = "noopener noreferrer";
+                        a.textContent = src.title || src.url;
+                        li.appendChild(a);
+                        sourcesList.appendChild(li);
+                    });
+                    sourcesBox.style.display = sources.length ? "block" : "none";
 
                     resolve();
                 };

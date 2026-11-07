@@ -14,6 +14,16 @@
 2. Click "Create API Key"
 3. Copy the key somewhere safe
 
+### AI model
+
+The worker uses **`gemini-3.8-flash`** with **Google Search grounding**, so verdicts are
+checked against live web sources (shown under "Sources" in the app) instead of the model's
+memory. If that model is unavailable it automatically falls back to `gemini-3.6-flash`.
+
+To change models later, edit `GEMINI_MODEL` in `worker/wrangler.toml` and redeploy.
+Check https://aistudio.google.com/docs/deprecations for shutdown dates.
+Hit `/api/health` to see which model is configured.
+
 ---
 
 ## Step 2: Create R2 Bucket
@@ -91,7 +101,7 @@ wrangler pages deploy . --project-name=storystamper
 
 ## Costs
 
-- **Gemini API**: ~$0.001-0.003 per check (basically free for testing)
+- **Gemini API**: a few tenths of a cent per check, plus Google Search grounding fees beyond the free daily allowance (see https://ai.google.dev/pricing)
 - **R2**: Free tier covers 10GB storage
 - **Workers**: Free tier covers 100k requests/day
 - **Pages**: Free
