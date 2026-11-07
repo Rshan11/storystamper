@@ -50,7 +50,7 @@ final class APIClient {
     }
 
     func signOut() async {
-        let _: EmptyResponse? = try? await send("api/auth/logout", method: "POST")
+        _ = try? await send("api/auth/logout", method: "POST") as EmptyResponse
     }
 
     func deleteAccount() async throws {

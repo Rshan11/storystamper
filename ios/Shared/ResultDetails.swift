@@ -25,7 +25,7 @@ struct ResultDetails: View {
                     Text("ANALYSIS").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     ForEach(Array(result.reasons.enumerated()), id: \.offset) { _, reason in
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Circle().fill(Color.accentColor).frame(width: 6, height: 6)
+                            Circle().fill(Color(red: 0.220, green: 0.631, blue: 0.412)).frame(width: 6, height: 6)
                             Text(reason).font(.callout)
                         }
                     }

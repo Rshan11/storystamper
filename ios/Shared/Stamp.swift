@@ -86,9 +86,11 @@ enum StampRenderer {
             ).height)
         }
         let reasonGap = 8 * scale
-        let stampHeight = 4 * scale + pad + ceil(verdictFont.lineHeight) + reasonGap
-            + reasonHeights.reduce(0, +) + CGFloat(reasons.count) * reasonGap
-            + 8 * scale + ceil(footerFont.lineHeight) + pad
+        let totalReasonHeight: CGFloat = reasonHeights.reduce(0, +)
+        let headerHeight: CGFloat = 4 * scale + pad + ceil(verdictFont.lineHeight) + reasonGap
+        let reasonsHeight: CGFloat = totalReasonHeight + CGFloat(reasons.count) * reasonGap
+        let footerHeight: CGFloat = 8 * scale + ceil(footerFont.lineHeight) + pad
+        let stampHeight: CGFloat = headerHeight + reasonsHeight + footerHeight
 
         let size = CGSize(width: width, height: screenshot.size.height + stampHeight)
         let format = UIGraphicsImageRendererFormat()
